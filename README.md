@@ -1,4 +1,4 @@
-# 机械革命无界 14 · Ryzen 7 8845H 黑苹果调优笔记
+# 机械革命翼龙15pro· Ryzen 7 8845H 黑苹果调优笔记
 
 > macOS 26.7.2 (25G332) / AMD Ryzen 7 8845H (Phoenix, family 0x19) / RTX 4060 Laptop
 > 外接 2560×1600@240Hz，内屏 2560×1600@240Hz
