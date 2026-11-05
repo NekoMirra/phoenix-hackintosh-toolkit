@@ -109,6 +109,27 @@ cd tools && ./powermode save status
   Foundation Model 资产下发；网络上的 enableAppleAI 一类工具明确要求 M1+，不适用。
 - 所有 kext 改动都必须走 OpenCore EFI 注入，boot KC 成员无法热替换。
 
+## 网络 / 影音 / iCloud（2026-11-04 ~ 11-05）
+
+这一轮把「装完之后连不上网、没有声音、登不上账号」的部分全部走了一遍，
+结论都落在 `docs/` 下的 8 篇专题里（索引见 [docs/README.md](docs/README.md)）。
+
+| 目标 | 手段 | 状态 |
+|---|---|---|
+| MT7922 Wi-Fi 可用 | `itlmt7922`（Ethernet 后端）+ 自写 CCMP 组播解密 + 信道表 / 看门狗补丁 | ✅ 含校园网强制门户 |
+| Wi-Fi 开机自动连 | 改 `ItlWiFi7922` 源码（启动扫描 + 记住上次 SSID）+ 登录看护脚本 | ✅ |
+| MT7922 蓝牙 | `SimpleMtkBtFw` + `SimpleMtkBtPatcher` + `MtkBtIdMask` + `BlueToolFixup` + `SkipBluetoothAutomaticFirmwareUpdate` | ✅ 必须冷启动 |
+| 内置麦克风 | 定位到 NullMoth `NMXAudio` 按 PCI 类抢占板载 HDA，输入引擎是空壳 | ⚠️ 待重启验证 |
+| Apple ID / iCloud | 配套三码 + 清 `akd` 认证缓存 | ✅ |
+| iMessage / FaceTime | 苹果要求人工验证（新号风控），与配置无关 | ⛔ 需联系客服 |
+| 内置摄像头 | UVC isoch 收不到包；权限/带宽/端口/驱动均已排除 | ❌ 无解 |
+| AirDrop / 接力 | MT7922 无 AWDL，只能换 Broadcom 卡或等 Apple SunriseWLAN | ❌ |
+| 独显 BAR 优化 | `ResizeGpuBars=13` → 四个显示头全灭、黑屏 | ❌ 已回滚 |
+
+另外 `tools/ntfs4mac-automount.sh` 被重写了：旧版**没有任何超时**，一次卡住就会把
+`diskarbitrationd` 拖死，之后所有 `diskutil` 命令（连 `diskutil list`）无限挂起、ESP 也挂不上。
+新版每个磁盘操作都套 `perl alarm` 硬超时、三级降级卸载、单实例锁，卡住时宁可保持只读也不拖死系统。
+
 ## 免责
 
 全部操作针对本人这一台机器，EC 寄存器与 SMU 消息 ID 换机型即不适用。
