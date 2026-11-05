@@ -1,0 +1,45 @@
+# 编译产物 / 第三方二进制包（不入库）
+*.o
+*.dylib
+*.zip
+*.tar.gz
+*.dmg
+*.log
+*.bak
+*.bak2
+*.bak3
+*.bak-*
+
+# 大型第三方包与驱动安装程序
+nvdriver/
+amd-pm/
+karabiner-install/
+
+# 编译出来的可执行文件
+tools/amdctl
+tools/amdpm
+tools/brightness
+tools/dispmode
+tools/ectool
+tools/smcread
+tools/powermode
+tools/ntfslog
+tools/ntfsdirty
+tools/locknow/locknow
+tools/lockprobe/probe
+tools/vtprobe/vtprobe
+tools/vtprobe/enc
+tools/vtprobe/hwdecode
+tools/vtprobe/hwencode
+probe/checkhost
+probe/cfgprobe
+probe/AMDProbe.kext/
+app/AMDPowerMode.app/
+
+# 系统快照类中间产物
+ecram.bin
+dsdt.aml
+
+# 工作台内部数据
+.workbuddy/
+.DS_Store
