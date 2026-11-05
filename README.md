@@ -4,21 +4,37 @@
 > 外接 2560×1600@240Hz，内屏 2560×1600@240Hz
   
 这台机器跑起来的难点不在「装上」，而在装完之后：AMD 移动端没有可用的 P-State 调频、
-风扇没有 SMC 传感器、NTFS 只读、NVIDIA 靠第三方驱动。这个仓库是把它逐项打通的全过程，
-包含自研工具、可复现的验证方法，以及每一个踩过的坑。
+风扇没有 SMC 传感器、Wi-Fi/蓝牙芯片没有原生驱动、macOS 26 干脆删掉了 AppleHDA、
+NTFS 只读、NVIDIA 靠第三方驱动。这个仓库是把它们逐项打通的全过程 ——
+包含自研 kext 与工具、可复现的验证方法、能直接引导的 EFI 快照，以及每一个踩过的坑。
 
 ## 成果一览
 
 | 目标 | 手段 | 状态 |
 |---|---|---|
-| CPU 功耗/温度墙 | 自研 `AMDProbe.kext` 直通 Phoenix SMU 邮箱（PPT-fast/slow、Tctl、STAPM） | ✅ |
+| **CPU 功耗/温度墙** | 自研 `AMDProbe.kext` 直通 Phoenix SMU 邮箱（PPT-fast/slow、Tctl、STAPM） | ✅ |
 | 四档功耗模式的系统联动 | `amd-pmsync.sh` + launchd，跟随 macOS 原生低电量/电池状态 | ✅ |
 | 菜单栏控制 | 自写 SwiftUI `AMDPowerMode.app`，实时温度 + 档位 + 风扇强冷 | ✅ |
 | 风扇控制 | 自研 kext 打通同方 EC（`\_SB.INOU` ECRR/ECRW），找到唯一生效位 0x751 bit6 | ✅ 两态（自动曲线 / 强冷） |
-| NTFS 读写 | 定位 FSKit「$LogFile 不干净」闸门，登录后自动重挂 | ⚠️ 见下文限制 |
-| 开机亮度恢复 | 自维护状态文件 + 常驻守护写回（驱动 NVRAM 与 macOS 都不持久化） | ✅ |
+| **开机亮度恢复** | 自维护状态文件 + 常驻守护写回（驱动 NVRAM 与 macOS 都不持久化） | ✅ |
 | Win+L 锁屏 | Karabiner complex_modifications + 自研 `locknow` | ✅ |
-| NVIDIA 硬解硬编 | NullMoth 2.7.1 实测：H.264/HEVC 解码 ✅，编码 ❌（Ada 未实现） | ✅ 已测明 |
+| **NVIDIA 硬解硬编** | NullMoth 实测：H.264/HEVC 解码 ✅，编码 ❌（Ada 未实现 NVENC） | ✅ 已测明 |
+| 独显 BAR 扩到 8 GB | `ResizeGpuBars=13` → 显示头全灭、黑屏（MUX 直连内屏不适用） | ❌ 已回滚 |
+| 240 Hz + HiDPI 并存 | 240 Hz 可跑，但无 2x 变体；只能「60 Hz 清晰」或「240 Hz 眼瞎」 | ⚠️ 二选一 |
+| 核显 780M 驱动 | RDNA3 无任何可用驱动（NootedRed 只到 Vega） | ❌ 无解 |
+| **MT7922 Wi-Fi 可用** | `itlmt7922`（Ethernet 后端）+ 自写 CCMP 组播解密 + 信道表 / 看门狗补丁 | ✅ 含校园网强制门户 |
+| Wi-Fi 开机自动连 | 改 `ItlWiFi7922` 源码（启动扫描 + 记住上次 SSID）+ 登录看护脚本 | ✅ |
+| 原生 Wi-Fi 菜单 / AWDL | `AirportMtkWlan` 1.7.0 在本机 100% panic；1.5.0 无 PMF、也无 AWDL | ❌ |
+| 隔空投送 / 接力 | 依赖 AWDL，MT7922 走以太网后端时系统无 `awdl0` | ❌ 见 open-issues |
+| **MT7922 蓝牙** | `SimpleMtkBtFw` + `SimpleMtkBtPatcher` + `MtkBtIdMask` + `BlueToolFixup` + 跳过刷机标记 | ✅ 必须冷启动 |
+| 板载声卡（输出） | macOS 26 无 `AppleHDA.kext`，用 `AppleALC` + `SimpleHDA` | ✅ |
+| 内置麦克风 | 定位到 NullMoth `NMXAudio` 按 PCI 类抢占板载 HDA，输入引擎是空壳 | ⚠️ 已修待验证 |
+| 内置摄像头 | UVC isoch 收不到包；权限 / 带宽 / 端口 / 驱动均已排除 | ❌ 无解 |
+| **Apple ID / iCloud** | 配套三码 + **清 `akd` 认证缓存**（`-20970` 的真正解法） | ✅ |
+| iMessage / FaceTime | 苹果要求人工验证（新号风控），与黑苹果配置无关 | ⛔ 需联系客服 |
+| **NTFS 读写** | 定位 FSKit「$LogFile 不干净」闸门，登录后自动重挂（脚本已加硬超时） | ⚠️ 见下文限制 |
+| USB 端口映射 | `USBPorts.kext`（28 个 kext 之一，摄像头/蓝牙端口均已核对） | ✅ |
+| OpenCanopy 图形菜单 | `PickerMode=External` + 自定义 `ic07` 背景（只认这一种块） | ✅ |
 
 ## 目录结构
 
@@ -105,31 +121,23 @@ cd tools && ./powermode save status
 ## 已知限制
 
 - 睡眠：`hibernatemode=0`、`standby=0`，`/var/vm/sleepimage` 随之删除（省 1GB）。
-- 蓝牙/无线（MT7922）与显示器刷新率未在本次范围内处理。
+- 蓝牙/无线（MT7922）、声卡与麦克风、Apple ID、摄像头已单独成文，见 [docs/README.md](docs/README.md)；
+  刷新率仍停在 60 Hz + 2x（240 Hz 下没有 HiDPI 变体）。
 - Apple 智能在本机**硬件层面不可用**：无 ANE，`/System/Library/AssetsV2` 下没有任何
   Foundation Model 资产下发；网络上的 enableAppleAI 一类工具明确要求 M1+，不适用。
 - 所有 kext 改动都必须走 OpenCore EFI 注入，boot KC 成员无法热替换。
 
-## 网络 / 影音 / iCloud（2026-11-04 ~ 11-05）
+## 网络 / 影音 / iCloud 的完整复盘
 
-这一轮把「装完之后连不上网、没有声音、登不上账号」的部分全部走了一遍，
-结论都落在 `docs/` 下的 8 篇专题里（索引见 [docs/README.md](docs/README.md)）。
+上表里凡是带 ⚠️ / ❌ 的条目，都不是「没试」而是「试到底了」，每一类的失败路径、
+日志证据和回滚方式都单独成文（索引见 [docs/README.md](docs/README.md)）：
 
-| 目标 | 手段 | 状态 |
-|---|---|---|
-| MT7922 Wi-Fi 可用 | `itlmt7922`（Ethernet 后端）+ 自写 CCMP 组播解密 + 信道表 / 看门狗补丁 | ✅ 含校园网强制门户 |
-| Wi-Fi 开机自动连 | 改 `ItlWiFi7922` 源码（启动扫描 + 记住上次 SSID）+ 登录看护脚本 | ✅ |
-| MT7922 蓝牙 | `SimpleMtkBtFw` + `SimpleMtkBtPatcher` + `MtkBtIdMask` + `BlueToolFixup` + `SkipBluetoothAutomaticFirmwareUpdate` | ✅ 必须冷启动 |
-| 内置麦克风 | 定位到 NullMoth `NMXAudio` 按 PCI 类抢占板载 HDA，输入引擎是空壳 | ⚠️ 待重启验证 |
-| Apple ID / iCloud | 配套三码 + 清 `akd` 认证缓存 | ✅ |
-| iMessage / FaceTime | 苹果要求人工验证（新号风控），与配置无关 | ⛔ 需联系客服 |
-| 内置摄像头 | UVC isoch 收不到包；权限/带宽/端口/驱动均已排除 | ❌ 无解 |
-| AirDrop / 接力 | MT7922 无 AWDL，只能换 Broadcom 卡或等 Apple SunriseWLAN | ❌ |
-| 独显 BAR 优化 | `ResizeGpuBars=13` → 四个显示头全灭、黑屏 | ❌ 已回滚 |
-
-另外 `tools/ntfs4mac-automount.sh` 被重写了：旧版**没有任何超时**，一次卡住就会把
-`diskarbitrationd` 拖死，之后所有 `diskutil` 命令（连 `diskutil list`）无限挂起、ESP 也挂不上。
-新版每个磁盘操作都套 `perl alarm` 硬超时、三级降级卸载、单实例锁，卡住时宁可保持只读也不拖死系统。
+- [docs/wifi-mt7922.md](docs/wifi-mt7922.md) —— 四条驱动路线对比，GTK/CCMP 三层 bug，AAD 掩码的「自洽陷阱」
+- [docs/bluetooth-mt7922.md](docs/bluetooth-mt7922.md) —— BlueTool 为什么一直在按 Broadcom 刷机
+- [docs/audio-and-mic.md](docs/audio-and-mic.md) —— 板载 HDA 被谁抢走，以及 TCC 的 `auth_value` 怎么读
+- [docs/apple-id.md](docs/apple-id.md) —— `-20970` 的五轮误判与真正解法
+- [docs/camera-uvc.md](docs/camera-uvc.md) —— 灯亮零帧的十条排除项
+- [docs/open-issues.md](docs/open-issues.md) —— AirDrop 的三条可选路线（含 Apple `AppleSunriseWLAN.dext` 的实证）
 
 ## 免责
 
