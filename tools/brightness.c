@@ -21,6 +21,12 @@ int main(int argc, char **argv) {
     CanFn can = (CanFn)dlsym(h, "DisplayServicesCanChangeBrightness");
     if (!get) { fprintf(stderr, "no DisplayServicesGetBrightness\n"); return 2; }
 
+    if (argc >= 2 && strcmp(argv[1], "-q") == 0) {
+        float b = 0.0f;
+        if (get(CGMainDisplayID(), &b) != 0) return 1;
+        printf("%.4f\n", b);
+        return 0;
+    }
     if (argc >= 2 && strcmp(argv[1], "-w") != 0) {
         if (!set) { fprintf(stderr, "no setter\n"); return 2; }
         float v = (float)atof(argv[1]);

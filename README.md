@@ -16,7 +16,7 @@
 | 菜单栏控制 | 自写 SwiftUI `AMDPowerMode.app`，实时温度 + 档位 + 风扇强冷 | ✅ |
 | 风扇控制 | 自研 kext 打通同方 EC（`\_SB.INOU` ECRR/ECRW），找到唯一生效位 0x751 bit6 | ✅ 两态（自动曲线 / 强冷） |
 | NTFS 读写 | 定位 FSKit「$LogFile 不干净」闸门，登录后自动重挂 | ⚠️ 见下文限制 |
-| 开机亮度恢复 | 解码驱动 NVRAM 变量 + 登录时补写（macOS 侧无持久化） | ✅ |
+| 开机亮度恢复 | 自维护状态文件 + 常驻守护写回（驱动 NVRAM 与 macOS 都不持久化） | ✅ |
 | Win+L 锁屏 | Karabiner complex_modifications + 自研 `locknow` | ✅ |
 | NVIDIA 硬解硬编 | NullMoth 2.7.1 实测：H.264/HEVC 解码 ✅，编码 ❌（Ada 未实现） | ✅ 已测明 |
 
@@ -58,14 +58,21 @@ ROM 曲线严格跟随 `0x701`：≤65℃ 地板 2000rpm，94℃ 才 2600–3130
 `fsck_fskit -y` 只核查、`diskutil -mountOptions` 不透传、`/etc/fstab` 同样不透传。
 **唯一解**是回 Windows 正常关机（或 `powercfg /h off`）让日志回放，之后登录脚本即可自动挂成读写。
 
-### 5. 开机亮度：两边都没存
+### 5. 开机亮度：两边都没存，连驱动的 NVRAM 变量也不能信
 
 - 驱动 `NVRMFB` 有 NVRAM 变量 `nullmoth-backlight`，但只写不读，没有恢复路径；
 - macOS 侧 `/var/root/.../com.apple.CoreBrightness.plist` 里没有这块屏的 `DisplayPreferences`。
 
-变量编码（实测）：`[0x02][u16 小端 = 亮度×65535]`，改一次亮度 3 秒内写回。
-`tools/restore-brightness.sh` 在登录后解码并补写，`tools/brightness.c` 是唯一可靠的读写通道
-（DisplayServices 私有 API）。
+变量编码（实测）：`[0x02][u16 小端 = 亮度×65535]`。但它**不能当持久化来源**，两个原因都实测过：
+1. 开机时驱动会把 100% 写回去，覆盖上一次会话的值（开机 70 秒后读到的就是 65535）；
+2. 写入是延迟/去抖的，实测滞后几十秒到几分钟（屏幕已在 0.596，变量还停在 0.475）。
+
+另外实测：显示器休眠/唤醒**不会**重置亮度（`pmset displaysleepnow` + `caffeinate -u` 前后一致），
+所以只需要防开机那一次覆盖。
+
+`tools/brightness-daemon.sh` 因此自己维护 `~/.local/state/brightness-target`：
+启动后连写 8 次压住 WindowServer 的默认推送，60 秒保护期内偏离即写回，之后把偏离当作用户改动记录下来。
+`tools/brightness.c` 提供唯一可靠的读写通道（DisplayServices 私有 API），`-q` 供守护轮询。
 
 ### 6. 硬解判定不能用 VTIsHardwareDecodeSupported
 
