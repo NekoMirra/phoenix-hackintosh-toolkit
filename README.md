@@ -27,6 +27,7 @@ probe/      自研 AMDProbe.kext 源码（SMU 邮箱 + ACPI EC 通道）
 tools/      用户态工具与脚本（全部附源码）
 app/        AMDPowerMode 菜单栏 App（SwiftUI 单文件）
 docs/       按主题整理的结论 + journal/ 逐日工作记录
+efi/        可引导的 OpenCore 快照（kext 全量；config 三码已置空）
 ```
 
 ## 关键结论（每一条都有实测支撑）
