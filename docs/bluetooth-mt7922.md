@@ -61,14 +61,14 @@ BlueTool: builtin script completed with result 0
 ## 成功后的样子
 
 ```
-Address: 94:BB:43:89:DE:21     State: On
+Address: 94:BB:43:XX:XX:21     State: On
 Chipset: THIRD_PARTY_DONGLE     Firmware: v9489 c6166
 Transport: USB
 Supported services: HFP AVRCP A2DP HID Braille LEA AACP GATT SerialPort
 ```
 
 `THIRD_PARTY_DONGLE` 是正常结果（走基础蓝牙栈），耳机/键鼠/AirPods 音频都没问题。
-注意 MAC 与 Wi-Fi 连号（`en2 = 94:bb:43:89:de:20`），说明确实是同一个 MT7922 模块的两半。
+注意 MAC 与 Wi-Fi 连号（`en2 = 94:bb:43:XX:XX:20`），说明确实是同一个 MT7922 模块的两半。
 
 ## 成功判定的中间态（用来定位卡在哪一步）
 
